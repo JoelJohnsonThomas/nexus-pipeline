@@ -6,14 +6,61 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import logging
 import re
+import requests
+from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
     VideoUnavailable
 )
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Pydantic Models
+# ============================================================================
+
+class Transcript(BaseModel):
+    """Model for YouTube video transcript"""
+    text: str = Field(..., description="Full transcript text")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "This is the full transcript of the video..."
+            }
+        }
+
+
+class ChannelVideo(BaseModel):
+    """Model for YouTube channel video metadata"""
+    title: str = Field(..., description="Video title")
+    url: str = Field(..., description="Full YouTube video URL")
+    video_id: Optional[str] = Field(None, description="YouTube video ID (11 characters)")
+    published_at: Optional[datetime] = Field(None, description="Video publication timestamp")
+    content: str = Field(default="", description="Video description/summary")
+    transcript: Optional[str] = Field(None, description="Full video transcript if available")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "title": "Introduction to Machine Learning",
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "video_id": "dQw4w9WgXcQ",
+                "published_at": "2024-01-15T10:30:00",
+                "content": "Learn the basics of machine learning...",
+                "transcript": "Welcome to this tutorial on machine learning..."
+            }
+        }
+
+
+# ============================================================================
+# YouTube Scraper Class
+# ============================================================================
+
 
 
 class YouTubeScraper:
@@ -190,7 +237,7 @@ class YouTubeScraper:
         url: str,
         include_transcripts: bool = True,
         filter_by_time: bool = True
-    ) -> List[Dict]:
+    ) -> List[ChannelVideo]:
         """
         Scrape videos from a YouTube channel RSS feed.
         
@@ -200,7 +247,7 @@ class YouTubeScraper:
             filter_by_time: Whether to filter videos by time window
         
         Returns:
-            List of video dictionaries with title, url, published_at, content, transcript
+            List of ChannelVideo Pydantic models with video metadata
         """
         try:
             # Extract channel ID and build RSS URL
@@ -244,17 +291,18 @@ class YouTubeScraper:
                 if include_transcripts and video_id:
                     transcript = self.get_video_transcript(video_id)
                 
-                video = {
-                    "title": entry.get("title", "No Title"),
-                    "url": video_url,
-                    "video_id": video_id,
-                    "published_at": published_at,
-                    "content": entry.get("summary", ""),  # Video description
-                    "transcript": transcript,
-                }
+                # Create ChannelVideo Pydantic model
+                video = ChannelVideo(
+                    title=entry.get("title", "No Title"),
+                    url=video_url,
+                    video_id=video_id,
+                    published_at=published_at,
+                    content=entry.get("summary", ""),  # Video description
+                    transcript=transcript,
+                )
                 videos.append(video)
                 
-                logger.info(f"✅ Scraped: {video['title']} (published {published_at})")
+                logger.info(f"✅ Scraped: {video.title} (published {published_at})")
             
             logger.info(f"📊 Scraped {len(videos)} videos from YouTube channel")
             return videos

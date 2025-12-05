@@ -1,5 +1,5 @@
 # NexusFeed: Production-Grade AI News Aggregation Pipeline
-*Not a tutorial project. A multi-source ingestion system with LLM-powered summarization and automated delivery.*
+* A multi-source ingestion system with LLM-powered summarization and automated delivery.*
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -15,7 +15,7 @@ Most AI news aggregators are glorified RSS readers. This is a **production-ready
 - Manages **stateful processing** with PostgreSQL and Redis
 - Is **deployable today** on Render/Vercel with scheduled cron jobs
 
-## 🚨 **What Makes This Different (Recruiter Edition)**
+## 🚨 **What Makes This Different**
 
 | Typical Project | This Project |
 |----------------|--------------|
