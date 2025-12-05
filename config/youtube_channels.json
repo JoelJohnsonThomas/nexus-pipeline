@@ -1,0 +1,29 @@
+{
+    "channels": [
+        {
+            "name": "OpenAI",
+            "channel_id": "UCXZCJLdBC09xxGZ6gcdrc6A",
+            "description": "Official OpenAI YouTube channel"
+        },
+        {
+            "name": "Anthropic",
+            "channel_id": "UC9vQWLRJnPJzJu8rNQ7B4Ug",
+            "description": "Official Anthropic YouTube channel"
+        },
+        {
+            "name": "Google DeepMind",
+            "channel_id": "UCP7jMXSY2xbc3KCAE0MHQ-A",
+            "description": "Google DeepMind official channel"
+        },
+        {
+            "name": "Two Minute Papers",
+            "channel_id": "UCbfYPyITQ-7l4upoX8nvctg",
+            "description": "AI research paper summaries"
+        },
+        {
+            "name": "Yannic Kilcher",
+            "channel_id": "UCZHmQk67mSJgfCCTn7xBfew",
+            "description": "AI research and paper reviews"
+        }
+    ]
+}
