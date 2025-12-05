@@ -1,0 +1,46 @@
+# Agent Configuration for AI News Aggregator
+
+# User Preferences
+preferences:
+  # Topics of interest (used to prioritize content)
+  topics:
+    - "Artificial Intelligence"
+    - "Machine Learning"
+    - "Large Language Models"
+    - "AI Tools"
+    - "AI Research"
+    - "Generative AI"
+  
+  # Summary length preference
+  summary_length: "concise"  # Options: brief, concise, detailed
+  
+  # Tone preference
+  tone: "professional"  # Options: casual, professional, technical
+  
+  # Focus on breaking news
+  prioritize_breaking_news: true
+
+# Model Settings
+model:
+  # Temperature for generation (0.0 = deterministic, 1.0 = creative)
+  temperature: 0.3
+  
+  # Maximum tokens for each summary
+  max_tokens_per_summary: 150
+  
+  # Maximum tokens for full digest
+  max_tokens_total: 2000
+
+# Digest Formatting
+formatting:
+  # Include source name in each snippet
+  include_source_name: true
+  
+  # Group articles by source
+  group_by_source: true
+  
+  # Maximum articles per source in digest
+  max_articles_per_source: 5
+  
+  # Include publication date
+  include_date: true
