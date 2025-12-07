@@ -1,0 +1,5 @@
+Start
+Imported sqlalchemy
+Imported dotenv
+Error: No module named 'psycopg2'
+Done

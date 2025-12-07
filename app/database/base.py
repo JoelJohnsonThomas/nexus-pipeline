@@ -14,7 +14,7 @@ load_dotenv()
 # Database URL from environment variable
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://newsaggregator:newspassword@localhost:5432/newsaggregator"
+    "postgresql://newsaggregator:newspassword@localhost:5433/newsaggregator"
 )
 
 # Create SQLAlchemy engine
@@ -28,7 +28,7 @@ engine = create_engine(
 )
 
 # Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 
 # Base class for declarative models
 Base = declarative_base()
@@ -59,7 +59,7 @@ def init_db():
     """
     Initialize the database by creating all tables.
     """
-    from app.models import Source, Article  # Import models
+    from app.database.models import Source, Article, OpenAIArticle, AnthropicArticle, YouTubeVideo  # Import models
     Base.metadata.create_all(bind=engine)
     print("✅ Database tables created successfully!")
 

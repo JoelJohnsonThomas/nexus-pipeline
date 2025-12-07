@@ -6,8 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import google.generativeai as genai
 
-from app.database import get_db_session
-from app.models import Article, Source
+from app.database import get_db_session, Article, Source
 from app.config import config
 from agent.prompts import (
     load_system_prompt,

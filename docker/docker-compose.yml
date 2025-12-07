@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17
     container_name: newsaggregator-db
     restart: unless-stopped
     environment:
@@ -10,16 +10,16 @@ services:
       POSTGRES_PASSWORD: newspassword
       POSTGRES_DB: newsaggregator
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - newsaggregator_db_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U newsaggregator"]
+      test: [ "CMD-SHELL", "pg_isready -U newsaggregator" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
-  postgres_data:
+  newsaggregator_db_data:
     driver: local

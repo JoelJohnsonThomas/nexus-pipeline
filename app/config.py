@@ -17,7 +17,9 @@ class Config:
         "postgresql://newsaggregator:newspassword@localhost:5432/newsaggregator"
     )
     
-    # Google Gemini API
+    # 
+    # 
+    #  Gemini API
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     

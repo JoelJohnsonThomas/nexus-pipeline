@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple standalone runner script to execute all scrapers (YouTube, OpenAI, Anthropic).
-No database dependencies - just runs the scrapers and displays results.
+Scraper runner script that executes all scrapers and saves results to database.
 """
 import sys
 import argparse
@@ -16,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from app.scrapers.youtube_scraper import YouTubeScraper
 from app.scrapers.openai_scraper import OpenAIScraper
 from app.scrapers.anthropic_scraper import AnthropicScraper
+from app.database.repository import ArticleRepository, SourceRepository
+from app.database.models import SourceType
 
 
 def setup_logging(verbose: bool = False):
@@ -47,9 +48,115 @@ def load_youtube_channels(config_file: Path):
         return []
 
 
-def run_youtube_scraper(hours_back: int, include_transcripts: bool, config_file: Path):
+def save_youtube_videos(channel_name: str, channel_id: str, videos: list) -> dict:
+    """Save YouTube videos to database"""
+    stats = {"created": 0, "duplicates": 0, "errors": 0}
+    
+    # Get or create source
+    rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+    source = SourceRepository.get_source_by_url(rss_url)
+    
+    if not source:
+        logging.warning(f"Source not found for {channel_name}, skipping database save")
+        return stats
+    
+    # Prepare articles data
+    articles_data = []
+    for video in videos:
+        articles_data.append({
+            "source_id": source.id,
+            "title": video.title,
+            "url": video.url,
+            "content": video.content or "",
+            "published_at": video.published_at,
+            "video_id": video.video_id,
+            "category": None
+        })
+    
+    # Bulk insert
+    if articles_data:
+        stats = ArticleRepository.bulk_create_articles(articles_data)
+    
+    return stats
+
+
+def save_openai_articles(articles: list) -> dict:
+    """Save OpenAI articles to database"""
+    stats = {"created": 0, "duplicates": 0, "errors": 0}
+    
+    # Get source
+    source = SourceRepository.get_source_by_url("https://openai.com/news/rss.xml")
+    
+    if not source:
+        logging.warning("OpenAI source not found, skipping database save")
+        return stats
+    
+    # Prepare articles data
+    articles_data = []
+    for article in articles:
+        articles_data.append({
+            "source_id": source.id,
+            "title": article.title,
+            "url": article.url,
+            "content": article.summary or "",
+            "published_at": article.published_at,
+            "video_id": None,
+            "category": None
+        })
+    
+    # Bulk insert
+    if articles_data:
+        stats = ArticleRepository.bulk_create_articles(articles_data)
+    
+    return stats
+
+
+def save_anthropic_articles(articles: list) -> dict:
+    """Save Anthropic articles to database"""
+    stats = {"created": 0, "duplicates": 0, "errors": 0}
+    
+    # Group articles by category to find correct source
+    for article in articles:
+        # Determine source URL based on category
+        if article.category == "research":
+            source_url = "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml"
+        elif article.category == "engineering":
+            source_url = "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml"
+        elif article.category == "news":
+            source_url = "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml"
+        else:
+            logging.warning(f"Unknown Anthropic category: {article.category}")
+            continue
+        
+        source = SourceRepository.get_source_by_url(source_url)
+        
+        if not source:
+            logging.warning(f"Anthropic {article.category} source not found")
+            stats["errors"] += 1
+            continue
+        
+        # Save individual article
+        result = ArticleRepository.create_article(
+            source_id=source.id,
+            title=article.title,
+            url=article.url,
+            content=article.summary or "",
+            published_at=article.published_at,
+            video_id=None,
+            category=article.category
+        )
+        
+        if result:
+            stats["created"] += 1
+        else:
+            stats["duplicates"] += 1
+    
+    return stats
+
+
+def run_youtube_scraper(hours_back: int, include_transcripts: bool, config_file: Path, save_to_db: bool = True):
     """Run YouTube scraper for all configured channels"""
-    results = {"channels": [], "total_videos": 0, "errors": 0}
+    results = {"channels": [], "total_videos": 0, "errors": 0, "db_stats": {"created": 0, "duplicates": 0, "errors": 0}}
     
     logging.info("\n📺 YOUTUBE SCRAPER")
     logging.info("-" * 60)
@@ -73,6 +180,12 @@ def run_youtube_scraper(hours_back: int, include_transcripts: bool, config_file:
                 filter_by_time=True
             )
             
+            # Save to database
+            db_stats = {"created": 0, "duplicates": 0, "errors": 0}
+            if save_to_db and videos:
+                db_stats = save_youtube_videos(channel_name, channel_id, videos)
+                logging.info(f"  💾 Saved: {db_stats['created']} new, {db_stats['duplicates']} duplicates")
+            
             results["channels"].append({
                 "name": channel_name,
                 "channel_id": channel_id,
@@ -80,6 +193,9 @@ def run_youtube_scraper(hours_back: int, include_transcripts: bool, config_file:
                 "count": len(videos)
             })
             results["total_videos"] += len(videos)
+            results["db_stats"]["created"] += db_stats["created"]
+            results["db_stats"]["duplicates"] += db_stats["duplicates"]
+            results["db_stats"]["errors"] += db_stats["errors"]
             
             logging.info(f"  → Found {len(videos)} videos")
             
@@ -90,7 +206,7 @@ def run_youtube_scraper(hours_back: int, include_transcripts: bool, config_file:
     return results
 
 
-def run_openai_scraper(hours_back: int):
+def run_openai_scraper(hours_back: int, save_to_db: bool = True):
     """Run OpenAI scraper"""
     logging.info("\n🤖 OPENAI SCRAPER")
     logging.info("-" * 60)
@@ -98,14 +214,21 @@ def run_openai_scraper(hours_back: int):
     try:
         scraper = OpenAIScraper(hours_back=hours_back)
         articles = scraper.scrape_articles(filter_by_time=True)
+        
+        # Save to database
+        db_stats = {"created": 0, "duplicates": 0, "errors": 0}
+        if save_to_db and articles:
+            db_stats = save_openai_articles(articles)
+            logging.info(f"  💾 Saved: {db_stats['created']} new, {db_stats['duplicates']} duplicates")
+        
         logging.info(f"  → Found {len(articles)} articles")
-        return {"articles": articles, "total": len(articles), "error": None}
+        return {"articles": articles, "total": len(articles), "error": None, "db_stats": db_stats}
     except Exception as e:
         logging.error(f"Error scraping OpenAI: {e}")
-        return {"articles": [], "total": 0, "error": str(e)}
+        return {"articles": [], "total": 0, "error": str(e), "db_stats": {"created": 0, "duplicates": 0, "errors": 0}}
 
 
-def run_anthropic_scraper(hours_back: int):
+def run_anthropic_scraper(hours_back: int, save_to_db: bool = True):
     """Run Anthropic scraper"""
     logging.info("\n🧠 ANTHROPIC SCRAPER")
     logging.info("-" * 60)
@@ -113,17 +236,24 @@ def run_anthropic_scraper(hours_back: int):
     try:
         scraper = AnthropicScraper(hours_back=hours_back)
         articles = scraper.scrape_articles(filter_by_time=True)
+        
+        # Save to database
+        db_stats = {"created": 0, "duplicates": 0, "errors": 0}
+        if save_to_db and articles:
+            db_stats = save_anthropic_articles(articles)
+            logging.info(f"  💾 Saved: {db_stats['created']} new, {db_stats['duplicates']} duplicates")
+        
         logging.info(f"  → Found {len(articles)} articles")
-        return {"articles": articles, "total": len(articles), "errors": 0}
+        return {"articles": articles, "total": len(articles), "errors": 0, "db_stats": db_stats}
     except Exception as e:
         logging.error(f"Error scraping Anthropic: {e}")
-        return {"articles": [], "total": 0, "errors": 1}
+        return {"articles": [], "total": 0, "errors": 1, "db_stats": {"created": 0, "duplicates": 0, "errors": 0}}
 
 
 def main():
     """Main runner function"""
     parser = argparse.ArgumentParser(
-        description='Run all AI news scrapers (YouTube, OpenAI, Anthropic)',
+        description='Run all AI news scrapers (YouTube, OpenAI, Anthropic) and save to database',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -135,6 +265,9 @@ Examples:
   
   # Include YouTube transcripts (slower)
   python run_scrapers.py --transcripts
+  
+  # Don't save to database (dry run)
+  python run_scrapers.py --no-save
   
   # Verbose output
   python run_scrapers.py --verbose
@@ -155,6 +288,12 @@ Examples:
     )
     
     parser.add_argument(
+        '--no-save',
+        action='store_true',
+        help='Do not save to database (dry run)'
+    )
+    
+    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Enable verbose logging'
@@ -166,6 +305,7 @@ Examples:
     setup_logging(args.verbose)
     
     logger = logging.getLogger(__name__)
+    save_to_db = not args.no_save
     
     try:
         # Config file path
@@ -174,12 +314,16 @@ Examples:
         
         logger.info("=" * 60)
         logger.info(f"STARTING SCRAPER RUN (Looking back {args.hours} hours)")
+        if save_to_db:
+            logger.info("💾 Database saving: ENABLED")
+        else:
+            logger.info("💾 Database saving: DISABLED (dry run)")
         logger.info("=" * 60)
         
         # Run all scrapers
-        youtube_results = run_youtube_scraper(args.hours, args.transcripts, youtube_config)
-        openai_results = run_openai_scraper(args.hours)
-        anthropic_results = run_anthropic_scraper(args.hours)
+        youtube_results = run_youtube_scraper(args.hours, args.transcripts, youtube_config, save_to_db)
+        openai_results = run_openai_scraper(args.hours, save_to_db)
+        anthropic_results = run_anthropic_scraper(args.hours, save_to_db)
         
         # Calculate summary
         total_items = (
@@ -193,6 +337,18 @@ Examples:
             anthropic_results["errors"]
         )
         
+        # Database stats
+        total_saved = (
+            youtube_results["db_stats"]["created"] +
+            openai_results["db_stats"]["created"] +
+            anthropic_results["db_stats"]["created"]
+        )
+        total_duplicates = (
+            youtube_results["db_stats"]["duplicates"] +
+            openai_results["db_stats"]["duplicates"] +
+            anthropic_results["db_stats"]["duplicates"]
+        )
+        
         # Display summary
         print("\n" + "=" * 60)
         print("📊 FINAL SUMMARY")
@@ -202,6 +358,11 @@ Examples:
         print(f"  📺 YouTube videos: {youtube_results['total_videos']} (from {len(youtube_results['channels'])} channels)")
         print(f"  🤖 OpenAI articles: {openai_results['total']}")
         print(f"  🧠 Anthropic articles: {anthropic_results['total']}")
+        
+        if save_to_db:
+            print(f"\n💾 Database:")
+            print(f"  ✅ Saved: {total_saved} new articles")
+            print(f"  ⏭️  Skipped: {total_duplicates} duplicates")
         
         if total_errors > 0:
             print(f"\n⚠️  Errors encountered: {total_errors}")

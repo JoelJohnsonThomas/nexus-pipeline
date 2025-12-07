@@ -4,8 +4,7 @@ Interactive script to add news sources to the database.
 import sys
 import logging
 
-from app.database import get_db_session
-from app.models import Source, SourceType
+from app.database import get_db_session, Source, SourceType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

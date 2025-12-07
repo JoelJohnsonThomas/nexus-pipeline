@@ -8,8 +8,7 @@ from datetime import datetime
 from typing import List, Dict, Optional
 from sqlalchemy.exc import IntegrityError
 
-from app.database import get_db_session
-from app.models import Source, Article, SourceType
+from app.database import get_db_session, Source, Article, SourceType
 from app.scrapers.youtube_scraper import YouTubeScraper
 from app.scrapers.blog_scraper import BlogScraper
 from app.scrapers.openai_scraper import OpenAIScraper

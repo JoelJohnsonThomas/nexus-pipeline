@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "E:\CSE\External\AI_Projects\AI-NEWS-AGGREGATOR\app\database\create_tables.py", line 14, in <module>
+    from app.database import init_db, get_db_session
+ModuleNotFoundError: No module named 'app'
