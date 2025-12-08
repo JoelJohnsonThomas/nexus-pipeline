@@ -14,7 +14,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.scrapers.youtube_scraper import YouTubeScraper
 from app.scrapers.openai_scraper import OpenAIScraper
+
 from app.scrapers.anthropic_scraper import AnthropicScraper
+from app.scrapers.google_scraper import GoogleScraper
 from app.database.repository import ArticleRepository, SourceRepository
 from app.database.models import SourceType
 
@@ -154,6 +156,37 @@ def save_anthropic_articles(articles: list) -> dict:
     return stats
 
 
+def save_google_articles(articles: list) -> dict:
+    """Save Google Blog articles to database"""
+    stats = {"created": 0, "duplicates": 0, "errors": 0}
+    
+    # Get source
+    source = SourceRepository.get_source_by_url("https://blog.google/rss")
+    
+    if not source:
+        logging.warning("Google Blog source not found, skipping database save")
+        return stats
+    
+    # Prepare articles data
+    articles_data = []
+    for article in articles:
+        articles_data.append({
+            "source_id": source.id,
+            "title": article.title,
+            "url": article.url,
+            "content": article.summary or "",
+            "published_at": article.published_at,
+            "video_id": None,
+            "category": "blog"
+        })
+    
+    # Bulk insert
+    if articles_data:
+        stats = ArticleRepository.bulk_create_articles(articles_data)
+    
+    return stats
+
+
 def run_youtube_scraper(hours_back: int, include_transcripts: bool, config_file: Path, save_to_db: bool = True):
     """Run YouTube scraper for all configured channels"""
     results = {"channels": [], "total_videos": 0, "errors": 0, "db_stats": {"created": 0, "duplicates": 0, "errors": 0}}
@@ -250,6 +283,28 @@ def run_anthropic_scraper(hours_back: int, save_to_db: bool = True):
         return {"articles": [], "total": 0, "errors": 1, "db_stats": {"created": 0, "duplicates": 0, "errors": 0}}
 
 
+def run_google_scraper(hours_back: int, save_to_db: bool = True):
+    """Run Google Blog scraper"""
+    logging.info("\n🔎 GOOGLE BLOG SCRAPER")
+    logging.info("-" * 60)
+    
+    try:
+        scraper = GoogleScraper(hours_back=hours_back)
+        articles = scraper.scrape_articles(filter_by_time=True)
+        
+        # Save to database
+        db_stats = {"created": 0, "duplicates": 0, "errors": 0}
+        if save_to_db and articles:
+            db_stats = save_google_articles(articles)
+            logging.info(f"  💾 Saved: {db_stats['created']} new, {db_stats['duplicates']} duplicates")
+        
+        logging.info(f"  → Found {len(articles)} articles")
+        return {"articles": articles, "total": len(articles), "errors": 0, "db_stats": db_stats}
+    except Exception as e:
+        logging.error(f"Error scraping Google Blog: {e}")
+        return {"articles": [], "total": 0, "errors": 1, "db_stats": {"created": 0, "duplicates": 0, "errors": 0}}
+
+
 def main():
     """Main runner function"""
     parser = argparse.ArgumentParser(
@@ -321,32 +376,40 @@ Examples:
         logger.info("=" * 60)
         
         # Run all scrapers
+
         youtube_results = run_youtube_scraper(args.hours, args.transcripts, youtube_config, save_to_db)
         openai_results = run_openai_scraper(args.hours, save_to_db)
         anthropic_results = run_anthropic_scraper(args.hours, save_to_db)
+        google_results = run_google_scraper(args.hours, save_to_db)
         
         # Calculate summary
         total_items = (
             youtube_results["total_videos"] +
             openai_results["total"] +
-            anthropic_results["total"]
+
+            anthropic_results["total"] +
+            google_results["total"]
         )
         total_errors = (
             youtube_results["errors"] +
             (1 if openai_results["error"] else 0) +
-            anthropic_results["errors"]
+            anthropic_results["errors"] +
+            google_results["errors"]
         )
         
         # Database stats
         total_saved = (
             youtube_results["db_stats"]["created"] +
             openai_results["db_stats"]["created"] +
-            anthropic_results["db_stats"]["created"]
+
+            anthropic_results["db_stats"]["created"] +
+            google_results["db_stats"]["created"]
         )
         total_duplicates = (
             youtube_results["db_stats"]["duplicates"] +
             openai_results["db_stats"]["duplicates"] +
-            anthropic_results["db_stats"]["duplicates"]
+            anthropic_results["db_stats"]["duplicates"] +
+            google_results["db_stats"]["duplicates"]
         )
         
         # Display summary
@@ -357,7 +420,9 @@ Examples:
         print(f"\nBreakdown:")
         print(f"  📺 YouTube videos: {youtube_results['total_videos']} (from {len(youtube_results['channels'])} channels)")
         print(f"  🤖 OpenAI articles: {openai_results['total']}")
+
         print(f"  🧠 Anthropic articles: {anthropic_results['total']}")
+        print(f"  🔎 Google Blog articles: {google_results['total']}")
         
         if save_to_db:
             print(f"\n💾 Database:")
@@ -382,10 +447,17 @@ Examples:
                 print(f"  • {article.title}")
                 print(f"    {article.url}")
         
+
         if anthropic_results['total'] > 0:
             print("\n🧠 Sample Anthropic Articles:")
             for article in anthropic_results['articles'][:2]:
                 print(f"  • [{article.category}] {article.title}")
+                print(f"    {article.url}")
+
+        if google_results['total'] > 0:
+            print("\n🔎 Sample Google Articles:")
+            for article in google_results['articles'][:2]:
+                print(f"  • {article.title}")
                 print(f"    {article.url}")
         
         print("\n✅ Scraping complete!")

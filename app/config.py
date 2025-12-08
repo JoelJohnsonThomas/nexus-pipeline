@@ -14,7 +14,7 @@ class Config:
     # Database
     DATABASE_URL = os.getenv(
         "DATABASE_URL",
-        "postgresql://newsaggregator:newspassword@localhost:5432/newsaggregator"
+        "postgresql://newsaggregator:newspassword@localhost:5433/newsaggregator"
     )
     
     # 
