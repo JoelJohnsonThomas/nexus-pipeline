@@ -55,8 +55,18 @@ class Article(Base):
     video_id = Column(String(128), nullable=True)  # For YouTube videos
     category = Column(String(128), nullable=True)  # For Anthropic (research/engineering/news)
     
+    # Processing pipeline fields
+    processing_status = Column(String(20), default="pending", nullable=False, index=True)
+    full_content = Column(Text, nullable=True)  # Extracted full text content
+    extraction_method = Column(String(50), nullable=True)  # e.g., rss, youtube_transcript, newspaper3k
+    
     # Relationship to source
     source = relationship("Source", back_populates="articles")
+    
+    # Relationships to extended models (will be populated when extended models are imported)
+    summaries = relationship("ArticleSummary", back_populates="article", cascade="all, delete-orphan", lazy="dynamic")
+    embedding = relationship("ArticleEmbedding", back_populates="article", uselist=False, cascade="all, delete-orphan")
+    processing_queue = relationship("ProcessingQueue", back_populates="article", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Article(id={self.id}, title='{self.title[:50]}...', source_id={self.source_id})>"

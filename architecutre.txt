@@ -1,0 +1,60 @@
+Phase 1: Database & Core Infrastructure
+ Design new PostgreSQL schema with vector support
+ Add pgvector extension for embeddings
+ Create tables for summaries, embeddings, subscriptions
+ Update article metadata structure
+ Set up Redis for caching
+ Add Redis to docker-compose
+ Create Redis client wrapper
+ Implement cache strategy
+Install dependencies and start services
+ Update pyproject.toml with new packages
+ Run uv sync to install dependencies
+ Start Docker services (postgres + redis)
+ Run database migration
+
+
+Phase 2: Message Queue & Orchestration
+ Implement message queue (RabbitMQ/Redis Queue)
+ Create queue client for RQ
+ Create queue workers
+ Create queue consumers for processing
+ Build orchestrator service
+ Task routing logic
+ Error handling & retries
+ Dead letter queue
+
+Phase 3: Processing Pipeline
+ Content extraction layer
+ Enhance existing scrapers
+ Full-text extraction for articles
+ Transcript extraction for videos
+ LLM summarization service
+ Integrate Gemini API
+ Add Claude API support (optional)
+ Create prompt templates
+ Implement rate limiting
+ Vector embeddings generation
+ Choose embedding model
+ Generate embeddings for summaries
+ Store in PostgreSQL with pgvector
+
+Phase 4: Email Delivery System
+ Email engine with Jinja2
+ Create email templates
+ Build template rendering service
+ Personalization logic
+ SMTP/Resend API integration
+ Configure email service
+ Implement sending logic
+ Handle bounces & failures
+ Subscription management
+ User preferences table
+ Frequency settings
+ Unsubscribe handling
+
+Phase 5: Integration & Testing
+ End-to-end pipeline testing
+ Performance optimization
+ Monitoring & logging setup
+ Documentation updates

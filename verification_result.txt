@@ -1,0 +1,21 @@
+Connecting to postgresql://newsaggregator:jack%40950@localhost:5433/newsaggregator
+Found tables: []
+❌ Missing tables: ['openai_articles', 'anthropic_articles', 'youtube_videos']
+Attempting to create missing tables...
+❌ Error: (psycopg2.errors.UndefinedObject) type "vector" does not exist
+LINE 5:  embedding VECTOR(384) NOT NULL, 
+                   ^
+
+[SQL: 
+CREATE TABLE article_embeddings (
+	id SERIAL NOT NULL, 
+	article_id INTEGER NOT NULL, 
+	embedding VECTOR(384) NOT NULL, 
+	model VARCHAR(50) NOT NULL, 
+	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(article_id) REFERENCES articles (id) ON DELETE CASCADE
+)
+
+]
+(Background on this error at: https://sqlalche.me/e/20/f405)
