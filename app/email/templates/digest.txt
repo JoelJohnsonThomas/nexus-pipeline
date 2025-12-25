@@ -1,0 +1,29 @@
+AI NEWS DIGEST
+{{ current_date }}
+================================================================================
+
+{{ article_count }} new articles from your AI news sources
+
+{% for article in articles %}
+--------------------------------------------------------------------------------
+{{ article.title }}
+{{ article.url }}
+
+Source: {{ article.source_name }} | Published: {{ article.published_date }}
+
+{{ article.summary }}
+
+{% if article.key_points %}
+Key Insights:
+{% for point in article.key_points %}
+  • {{ point }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+================================================================================
+
+You're receiving this because you subscribed to AI News Digest
+
+Unsubscribe: {{ unsubscribe_url }}
+Manage Preferences: {{ preferences_url }}

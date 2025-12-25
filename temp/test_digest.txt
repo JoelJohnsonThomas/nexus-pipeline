@@ -1,0 +1,57 @@
+AI NEWS DIGEST
+December 24, 2025
+================================================================================
+
+2 new articles from your AI news sources
+
+
+--------------------------------------------------------------------------------
+Gemini 2.0: Our most capable AI model yet
+https://blog.google/technology/ai/google-gemini-ai-update-december-2024/
+
+Source: Google Blog | Published: December 11, 2024
+
+Google has announced Gemini 2.0, their most capable AI model to date. The new model features improved reasoning capabilities, multimodal understanding, and enhanced performance across various tasks.
+
+
+Key Insights:
+
+  • Significantly improved reasoning and problem-solving abilities
+
+  • Native multimodal capabilities (text, images, audio, video)
+
+  • Enhanced code generation and debugging features
+
+  • Better multilingual support
+
+
+
+
+--------------------------------------------------------------------------------
+Claude 3.5 Sonnet: Enhanced for coding and analysis
+https://www.anthropic.com/news/claude-3-5-sonnet
+
+Source: Anthropic | Published: December 10, 2024
+
+Anthropic has released Claude 3.5 Sonnet with major improvements in coding tasks and data analysis. The model shows significant gains in benchmark performance while maintaining safety and reliability.
+
+
+Key Insights:
+
+  • 40% improvement on coding benchmarks
+
+  • Enhanced reasoning for complex analysis tasks
+
+  • Improved context window handling
+
+  • Better instruction following
+
+
+
+
+================================================================================
+
+You're receiving this because you subscribed to AI News Digest
+
+Unsubscribe: http://localhost:8000/unsubscribe?email=test@example.com
+Manage Preferences: http://localhost:8000/preferences?email=test@example.com
