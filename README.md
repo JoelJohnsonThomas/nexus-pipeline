@@ -665,7 +665,7 @@ Contributions welcome! This project demonstrates data engineering patterns. Focu
 
 ## 📄 **License**
 
-MIT License - see LICENSE file
+[MIT License](LICENSE) - see LICENSE file
 
 ---
 
