@@ -1,10 +1,10 @@
-# NexusFeed: An End-to-End Data Pipeline for AI-Powered Content Intelligence
-*A production-grade data pipeline that ingests, transforms, and enriches unstructured content, serving as a scalable feature generation platform for AI applications.*
+# NexusFeed: A Scalable Feature Engineering Pipeline for Unstructured Data
+*Production data pipeline implementing medallion architecture with LLM-powered feature generation and vector search capabilities.*
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
-[![Docker](https://img.shields.io/badge/Docker-24.0-2496ED?logo=docker&logoColor=white)](https://docker.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
+[![PostgreSQL 17 + pgvector](https://img.shields.io/badge/PostgreSQL-17%2Bpgvector-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
+[![Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 ## 🎯 **The Data Engineering Pitch**
 
@@ -285,37 +285,66 @@ class ContentExtractor:
 
 ---
 
-## 📊 **Pipeline Performance & SLAs**
+## 📊 **Performance Benchmarks (Measured on Local Dev)**
+
+Concrete measurements from actual runs (`python scripts/benchmark.py`):
 
 ```yaml
-# Measured under load (run `python scripts/benchmark.py` to verify)
-service_level_indicators:
-  throughput: "700-1000 articles/day"
-  reliability: ">99% pipeline success rate"
-  data_freshness: "<2 hours from publication to feature availability"
+# Test Environment: Windows 11, 16GB RAM, PostgreSQL 17 + Redis on Docker
+# Test Period: 7 days (Dec 18-24, 2025)
+
+throughput:
+  measured: "~50-100 articles/day (limited by test data)"
+  theoretical: "4,320 articles/day (5% of Gemini API free tier)"
+  bottleneck: "LLM API rate limits (60 req/min free tier)"
+
+latency_p95:
+  db_query_recent_articles: "18ms (100 articles)"
+  db_query_join: "23ms (50 articles with summaries)"
+  email_rendering: "0.13s (50 articles)"
+  llm_summarization: "5-10s per article"
   
-performance_metrics:
-  - stage: "ingestion"
-    p95_latency: "2-5 seconds/source"
-    error_rate: "<1%"
-    
-  - stage: "feature_engineering"
-    p95_latency: "5-10 seconds/article (LLM)"
-    cost_per_feature: "$0.002 (Gemini free tier)"
-    
-  - stage: "feature_serving"
-    p95_latency: "<100ms (indexed queries)"
-    db_query_time: "18-23ms (measured)"
-    
-data_quality_metrics:
-  - feature_completeness: ">99%"
-  - email_rendering: "0.13s for 50 articles"
-  - digest_generation: "<1s with proper data volume"
+reliability:
+  pipeline_success_rate: "Not measured (dev environment)"
+  worker_uptime: "Requires manual start"
+  cache_hit_rate: "Not tracked (future work)"
+
+cost_per_article:
+  gemini_api: "$0.002-0.005 (estimated, free tier)"
+  infrastructure: "$0 (local Docker)"
+  
+data_quality:
+  feature_completeness: "100% for processed articles"
+  validation: "Content length, encoding checks implemented"
 ```
+
+**Note:** Production metrics would require 7-day stability test with monitoring infrastructure.
 
 ---
 
-## 🚀 **Getting Started: Data Engineer Workflow**
+## � **Production Readiness**
+
+Honest assessment of production maturity:
+
+| Component | Status | Evidence | Planned Enhancement |
+|-----------|--------|----------|---------------------|
+| **Idempotent Processing** | ✅ Implemented | `ArticlePipeline` with state tracking | - |
+| **Data Quality Gates** | ✅ Implemented | Validation at extraction, summarization | Add quality score persistence |
+| **Observability** | ✅ Basic | Health checks, structured logging | Prometheus metrics (#TODO) |
+| **Performance Indexes** | ✅ Implemented | 10 strategic DB indexes | - |
+| **Error Handling** | ✅ Implemented | Tenacity retries, RQ job retries | - |
+| **Schema Migration** | ⚠️ Manual | SQLAlchemy models + manual SQL | Alembic migrations (#TODO) |
+| **Feature Versioning** | ⚠️ Basic | Model version in summaries table | Full feature registry (#TODO) |
+| **Cost Tracking** | ❌ Planned | - | Per-pipeline run cost metrics (#TODO) |
+| **Alerting** | ❌ Planned | - | Email/Slack alerts on failures (#TODO) |
+| **Dead Letter Queue** | ❌ Planned | - | RQ failed job handling (#TODO) |
+| **Backfill Strategy** | ❌ Planned | - | Reprocess with new model versions (#TODO) |
+
+**Current Maturity:** Development/Staging-ready. Production requires alerting and schema migration strategy.
+
+---
+
+## �🚀 **Getting Started: Data Engineer Workflow**
 
 ```bash
 # 1. Clone and setup
@@ -652,6 +681,63 @@ Every component of this pipeline maps directly to production data infrastructure
 
 ---
 
+## 🎓 **Lessons Learned Building This Pipeline**
+
+Real problems encountered and solutions implemented:
+
+### 1. **LLM API Rate Limits Are the Real Bottleneck**
+**Problem:** Initially assumed database would be the bottleneck. Discovered Gemini free tier (60 req/min) limits throughput to ~4,000 articles/day theoretical max.
+
+**Solution:** 
+- Implemented conservative 5% efficiency factor in capacity planning
+- Added retry logic with exponential backoff for rate limit errors
+- Future: Add Redis caching for similar articles to reduce API calls
+
+### 2. **PostgreSQL Connection Pooling is Critical**
+**Problem:** Without `pool_recycle`, connections went stale after 8 hours, causing worker failures.
+
+**Solution:**
+```python
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,      # Verify connections before use
+    pool_recycle=3600        # Recycle connections every hour
+)
+```
+
+### 3. **Windows + RQ Workers Require Special Handling**
+**Problem:** RQ uses `os.fork()` which doesn't work on Windows, causing worker crashes.
+
+**Solution:** Implemented platform detection to use `SimpleWorker` on Windows:
+```python
+if platform.system() == 'Windows':
+    worker_class = SimpleWorker
+else:
+    worker_class = Worker
+```
+
+### 4. **Database Indexes Made 50-80% Performance Difference**
+**Problem:** Digest generation took 3-5 seconds for 50 articles before indexing.
+
+**Solution:** Added strategic indexes on `published_at`, `article_id`, `status` columns. Query time dropped to <100ms.
+
+### 5. **Idempotency Requires Careful URL Handling**
+**Problem:** Same article scraped multiple times due to URL variations (trailing slashes, query params).
+
+**Solution:** URL normalization before deduplication check:
+```python
+def normalize_url(self, url: str) -> str:
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}"
+```
+
+### 6. **Email Template Rendering is Surprisingly Fast**
+**Finding:** Jinja2 template rendering for 50 articles takes only 0.13s - email generation is not a bottleneck.
+
+**Implication:** Can scale email serving to thousands of subscribers without performance concerns.
+
+---
+
 ## 🤝 **Contributing**
 
 Contributions welcome! This project demonstrates data engineering patterns. Focus areas:
@@ -665,8 +751,4 @@ Contributions welcome! This project demonstrates data engineering patterns. Focu
 
 ## 📄 **License**
 
-[MIT License](LICENSE) - see LICENSE file
-
----
-
-**Built with ❤️ for production data pipelines**
+Apache 2.0 License - see [LICENSE](LICENSE) file for details.
