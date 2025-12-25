@@ -13,7 +13,7 @@ load_dotenv()
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://newsaggregator:newspassword@localhost:5433/newsaggregator"
+    "postgresql://user:password@localhost:5432/dbname"  # Generic placeholder
 )
 
 def verify():

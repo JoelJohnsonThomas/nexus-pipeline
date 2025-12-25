@@ -152,8 +152,8 @@ class LLMSummarizer:
 ## 🚀 **Getting Started (Engineer-Focused)**
 
 ```bash
-# 1. Clone and setup (one command)
-git clone https://github.com/JoelJohnsonThomas/nexus-pipeline.git
+# 1. Clone and setup
+git clone https://github.com/yourusername/AI-NEWS-AGGREGATOR.git
 cd AI-NEWS-AGGREGATOR
 
 # 2. Environment setup (modern Python tooling)
@@ -187,15 +187,31 @@ python scripts/integration_test.py
 ## 📈 **Production Deployment**
 
 ### Option A: Docker with Cron (Recommended)
+
+**Build the Docker image:**
 ```bash
+docker build -t ai-news-aggregator:latest .
+```
+
+**Run workers (persistent):**
+```bash
+docker run -d \
+  --name news-workers \
+  --restart=always \
+  --env-file .env \
+  --network host \
+  ai-news-aggregator:latest \
+  python scripts/run_workers.py
+```
+
+**Schedule jobs with host cron:**
+```bash
+# Add to crontab (crontab -e)
 # Daily scraping at 6 AM
-0 6 * * * cd /path/to/project && python run_scrapers_with_pipeline.py --hours 24
+0 6 * * * docker exec news-workers python run_scrapers_with_pipeline.py --hours 24
 
-# Daily digest at 8 AM
-0 8 * * * cd /path/to/project && python scripts/send_digest_now.py --all
-
-# Workers (keep running)
-docker run -d --restart=always your-image python scripts/run_workers.py
+# Daily digest at 8 AM  
+0 8 * * * docker exec news-workers python scripts/send_digest_now.py --all
 ```
 
 ### Option B: GitHub Actions (Free Tier)
@@ -227,15 +243,20 @@ jobs:
 ## 📊 **Metrics That Matter**
 
 ```python
-# Production performance (after optimization)
+# Measured performance (run `python scripts/benchmark.py` to verify)
 METRICS = {
-    "articles_processed_per_day": "1,000+",
-    "avg_summarization_latency": "5-10 seconds",
-    "email_delivery_rate": "99.8%",
-    "cache_hit_rate": "85%",
-    "digest_generation_time": "< 1 second (50 articles)",
-    "cost_per_digest": "$0.02 (Gemini free tier)",
+    "theoretical_capacity": "700-1000 articles/day (Gemini free tier: 60 req/min)",
+    "avg_summarization_latency": "5-10 seconds/article",
+    "digest_generation_time": "< 1 second (50 articles with indexes)",
+    "email_rendering_time": "< 0.5 seconds (50 articles)",
+    "db_query_time": "< 100ms (indexed queries)",
+    "gmail_smtp_limit": "500 emails/day",
 }
+```
+
+**Verify yourself:**
+```bash
+python scripts/benchmark.py
 ```
 
 ### Performance Benchmarks
@@ -244,6 +265,78 @@ METRICS = {
 - **LLM Summarization:** 5-10 seconds per article (Gemini 2.5-flash)
 - **Embedding Generation:** 0.5-2 seconds per article
 - **Digest Email:** 1-3 seconds per recipient
+
+---
+
+## ⚡ **Performance Optimization**
+
+This project implements production-grade optimizations:
+
+**Database Performance:**
+- **Connection Pooling:** SQLAlchemy engine configured with `pool_pre_ping=True` and `pool_recycle=3600`
+- **Indexed Queries:** 10 strategic indexes on frequently queried columns (published_at, article_id, email, status)
+- **Query Optimization:** Digest generation uses efficient JOINs with LIMIT clauses
+
+**Batch Processing:**
+- **Embeddings:** Generated in batches (configurable, default single per job for memory efficiency)
+- **Queue Processing:** RQ workers process jobs asynchronously with automatic retries
+
+**Caching Strategy:**
+- **Redis Cache:** API responses cached with TTL
+- **Template Compilation:** Jinja2 templates compiled once on startup
+
+**Selective Scraping:**
+- **Incremental Updates:** Only fetch new content since last run
+- **RSS Parsing:** Efficient feedparser with conditional requests
+
+**Optimization Script:**
+```bash
+# Add performance indexes (run once after DB setup)
+python scripts/optimize_database.py
+```
+
+---
+
+## 📡 **Observability**
+
+Production-ready monitoring and logging:
+
+**Structured Logging:**
+- All components log to console with timestamps and log levels
+- Database queries logged in development mode
+- Worker job status tracked in `processing_queue` table
+
+**Health Monitoring:**
+```bash
+# Comprehensive health check
+python scripts/health_check.py
+```
+
+Validates:
+- Database connectivity
+- pgvector extension
+- Redis cache
+- Message queue status
+- Record counts per table
+
+**Key Metrics Tracked:**
+- Articles processed by status (pending/extracting/summarizing/embedding/complete/failed)
+- Queue depths (extraction, summarization, embedding queues)
+- Email delivery success/failure logs
+- Processing pipeline throughput
+
+**State Tracking:**
+- Every article tracked through pipeline stages in `processing_queue`
+- Failed jobs automatically retry with exponential backoff (via RQ)
+- Email deliveries logged to `email_deliveries` table (schema ready)
+
+**Future Enhancements:**
+- Prometheus metrics endpoint (`/metrics`)
+- Grafana dashboard for visualizations
+- Correlation IDs for distributed tracing
+- Alert on critical failures (>10% failure rate)
+
+---
 
 ## 🧪 **Testing Strategy (Shows Professionalism)**
 
