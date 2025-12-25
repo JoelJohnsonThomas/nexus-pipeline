@@ -30,7 +30,7 @@ class SubscriptionService:
         """
         subscribers = (
             self.db.query(EmailSubscription)
-            .filter(EmailSubscription.active == True)
+            .filter(EmailSubscription.is_active == True)
             .all()
         )
         
@@ -87,7 +87,7 @@ class SubscriptionService:
                 email=email,
                 name=name,
                 frequency=frequency,
-                active=True
+                is_active=True
             )
             self.db.add(subscription)
             self.db.commit()
@@ -149,7 +149,7 @@ class SubscriptionService:
                 logger.error(f"Subscription {subscriber_id} not found")
                 return False
             
-            subscription.active = False
+            subscription.is_active = False
             self.db.commit()
             
             logger.info(f"Unsubscribed: {subscription.email}")
@@ -176,7 +176,7 @@ class SubscriptionService:
                 logger.error(f"Subscription {subscriber_id} not found")
                 return False
             
-            subscription.active = True
+            subscription.is_active = True
             self.db.commit()
             
             logger.info(f"Reactivated subscription: {subscription.email}")

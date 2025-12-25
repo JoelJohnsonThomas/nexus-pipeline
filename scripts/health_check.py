@@ -18,42 +18,51 @@ logger = logging.getLogger(__name__)
 
 def check_database():
     """Check database connectivity"""
+    logger.info("\n🗄️ Checking database connection...")
     try:
+        # Use text() for raw SQL with SQLAlchemy 2.0
+        from sqlalchemy import text
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1")
+            result = conn.execute(text('SELECT 1'))
             result.fetchone()
-        logger.info("✅ Database: Connected")
+        logger.info("   ✅ Connected to database")
         return True
     except Exception as e:
-        logger.error(f"❌ Database: Failed - {e}")
+        logger.error(f"   ❌ Database connection failed: {e}")
         return False
 
 
 def check_pgvector():
-    """Check pgvector extension"""
+    """Check if pgvector extension is installed"""
+    logger.info("\n🔢 Checking pgvector extension...")
     try:
+        from sqlalchemy import text
         with engine.connect() as conn:
-            result = conn.execute("SELECT extname FROM pg_extension WHERE extname = 'vector'")
-            if result.fetchone():
-                logger.info("✅ pgvector: Enabled")
-                return True
-            else:
-                logger.error("❌ pgvector: Not installed")
-                return False
+            result = conn.execute(text("SELECT extname FROM pg_extension WHERE extname = 'vector'"))
+            extensions = result.fetchall()
+        
+        if extensions:
+            logger.info("   ✅ pgvector extension installed")
+            return True
+        else:
+            logger.warning("   ⚠️ pgvector extension not found")
+            return False
     except Exception as e:
-        logger.error(f"❌ pgvector: Check failed - {e}")
+        logger.error(f"   ❌ pgvector check failed: {e}")
         return False
 
 
 def check_redis():
     """Check Redis connectivity"""
+    logger.info("\n📦 Checking Redis cache...")
     try:
         redis_client = get_redis_client()
-        redis_client.ping()
-        logger.info("✅ Redis: Connected")
+        # RedisClient wrapper has self.client which is the actual redis.Redis instance
+        redis_client.client.ping()
+        logger.info(f"   ✅ Redis connected at {redis_client.host}:{redis_client.port}")
         return True
     except Exception as e:
-        logger.error(f"❌ Redis: Failed - {e}")
+        logger.error(f"   ❌ Redis check failed: {e}")
         return False
 
 

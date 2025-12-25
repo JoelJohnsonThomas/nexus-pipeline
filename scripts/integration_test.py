@@ -7,7 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import SessionLocal, Article, ArticleSummary, ArticleEmbedding, Source
+from app.database import SessionLocal, Article, ArticleSummary, ArticleEmbedding, Source, engine
+from sqlalchemy import text
 from app.queue import get_message_queue
 from app.email.digest_generator import get_digest_generator
 from app.email.renderer import get_email_renderer
@@ -40,10 +41,10 @@ class IntegrationTests:
             return False
     
     def test_database_connectivity(self):
-        """Test database connection and basic queries"""
-        db = SessionLocal()
-        db.execute("SELECT 1")
-        db.close()
+        """Test database connection"""
+        with engine.connect() as conn:
+            result = conn.execute(text('SELECT 1'))
+            result.fetchone()
         return True
     
     def test_sources_exist(self):
