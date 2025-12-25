@@ -319,8 +319,8 @@ data_quality_metrics:
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/yourusername/AI-NEWS-AGGREGATOR.git
-cd AI-NEWS-AGGREGATOR
+git clone https://github.com/JoelJohnsonThomas/nexus-pipeline.git
+cd nexus-pipeline
 
 # 2. Environment setup
 python -m venv .venv
