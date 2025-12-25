@@ -475,42 +475,58 @@ python scripts/benchmark.py
 ## 📁 **Project Structure**
 
 ```
-AI-NEWS-AGGREGATOR/
+nexus-pipeline/
 ├── app/
 │   ├── scrapers/          # Multi-source data ingestion (Bronze layer)
 │   │   ├── youtube_scraper.py
 │   │   ├── openai_scraper.py
 │   │   ├── anthropic_scraper.py
-│   │   └── google_scraper.py
+│   │   ├── google_scraper.py
+│   │   ├── blog_scraper.py
+│   │   └── scraper_manager.py
 │   ├── processing/        # Feature engineering pipeline (Silver → Gold)
 │   │   ├── llm_summarizer.py      # LLM-powered summarization
 │   │   ├── content_extractor.py   # Content cleaning & validation
-│   │   └── embedding_generator.py # Vector embedding generation
+│   │   └── embeddings.py          # Vector embedding generation
 │   ├── orchestrator/      # Pipeline orchestration
 │   │   ├── workers.py             # RQ worker functions
 │   │   └── pipeline.py            # Pipeline coordination
 │   ├── email/             # Serving layer (batch delivery)
 │   │   ├── digest_generator.py    # Feature aggregation
+│   │   ├── email_sender.py        # SMTP delivery
 │   │   ├── renderer.py            # Output formatting
+│   │   ├── subscription_service.py
 │   │   └── templates/
+│   │       ├── digest.html
+│   │       └── digest.txt
 │   ├── database/          # Feature store schema
-│   │   └── models.py              # SQLAlchemy ORM  
-│   ├── queue/             # Async processing
-│   └── cache/             # Redis caching layer
+│   │   ├── models.py              # SQLAlchemy ORM
+│   │   ├── base.py                # Database engine
+│   │   └── repository.py          # Data access layer
+│   ├── queue/             # Async processing (RQ)
+│   ├── cache/             # Redis caching layer
+│   └── config.py          # Configuration management
 ├── scripts/
 │   ├── run_workers.py              # Start processing workers
 │   ├── health_check.py             # Pipeline monitoring
 │   ├── integration_test.py         # E2E validation
 │   ├── optimize_database.py        # Performance tuning
 │   ├── benchmark.py                # Performance benchmarks
-│   └── send_digest_now.py          # Feature serving
+│   ├── send_digest_now.py          # Feature serving
+│   ├── init_tables.py              # Database initialization
+│   ├── seed_sources.py             # Seed data sources
+│   ├── seed_subscription.py        # Add test subscription
+│   └── test_email.py               # Email system testing
 ├── docker/
 │   └── docker-compose.yml          # PostgreSQL + Redis
 ├── Dockerfile                      # Production container
 ├── .dockerignore
-├── pyproject.toml                  # Modern Python packaging
+├── pyproject.toml                  # Modern Python packaging (uv)
+├── .env.example                    # Environment template
+├── run_scrapers_with_pipeline.py   # Main pipeline runner
 └── README.md
 ```
+
 
 ---
 
