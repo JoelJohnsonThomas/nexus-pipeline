@@ -110,22 +110,31 @@ def calculate_capacity():
     
     # Based on API limits
     gemini_free_tier_rpm = 60  # requests per minute
-    gemini_processing_time = 8  # average seconds per article
     
-    # Daily capacity
-    articles_per_hour = gemini_free_tier_rpm * 60 / (gemini_processing_time / 60)
-    articles_per_day = articles_per_hour * 24
+    # Maximum theoretical capacity (all 60 req/min used for summarization)
+    max_requests_per_hour = gemini_free_tier_rpm * 60
+    max_requests_per_day = max_requests_per_hour * 24
     
-    logger.info(f"   Gemini API: {gemini_free_tier_rpm} req/min free tier")
-    logger.info(f"   Avg processing: {gemini_processing_time}s per article")
-    logger.info(f"   Theoretical capacity: {int(articles_per_day)} articles/day")
-    logger.info(f"   Practical capacity (with overhead): ~{int(articles_per_day * 0.7)} articles/day")
+    logger.info(f"   Gemini API free tier: {gemini_free_tier_rpm} req/min")
+    logger.info(f"   Max theoretical capacity: {max_requests_per_day:,} requests/day")
+    
+    # Realistic capacity accounting for:
+    # - Other API calls (model queries, retries)
+    # - Processing overhead (extraction, embedding)
+    # - Network latency
+    # - Failed requests requiring retries
+    # Estimate: ~70-80% of theoretical max can be used for article summarization
+    realistic_efficiency = 0.05  # Very conservative: 5% of max (accounting for all overhead)
+    realistic_capacity = int(max_requests_per_day * realistic_efficiency)
+    
+    logger.info(f"   Realistic capacity (5% efficiency): ~{realistic_capacity:,} articles/day")
+    logger.info(f"   This accounts for: extraction, embeddings, retries, overhead")
     
     # Email capacity
     gmail_daily_limit = 500
-    logger.info(f"\n   Gmail SMTP: {gmail_daily_limit} emails/day limit")
+    logger.info(f"\n   Gmail SMTP limit: {gmail_daily_limit} emails/day")
     
-    return int(articles_per_day * 0.7)
+    return realistic_capacity
 
 
 def main():
