@@ -88,6 +88,7 @@ class EmailSubscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=True)  # Subscriber name (optional)
     frequency = Column(Enum(EmailFrequency), nullable=False, default=EmailFrequency.DAILY)
     source_filters = Column(JSON, nullable=True)  # Array of source IDs to include
     is_active = Column(Boolean, default=True, nullable=False, index=True)

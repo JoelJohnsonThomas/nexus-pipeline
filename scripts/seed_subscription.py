@@ -46,7 +46,7 @@ def seed_subscription(email: str, name: str = None, frequency: str = 'daily'):
         logger.info(f"   Email: {subscription.email}")
         logger.info(f"   Name: {subscription.name or 'Not provided'}")
         logger.info(f"   Frequency: {subscription.frequency.value}")
-        logger.info(f"   Active: {subscription.active}")
+        logger.info(f"   Active: {subscription.is_active}")
         logger.info(f"   ID: {subscription.id}")
     else:
         logger.error("❌ Failed to create subscription")
