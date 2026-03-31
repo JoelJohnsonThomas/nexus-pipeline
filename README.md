@@ -4,6 +4,7 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL 17 + pgvector](https://img.shields.io/badge/PostgreSQL-17%2Bpgvector-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
+[![Tests](https://github.com/JoelJohnsonThomas/nexus-pipeline/actions/workflows/tests.yml/badge.svg)](https://github.com/JoelJohnsonThomas/nexus-pipeline/actions/workflows/tests.yml)
 [![Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 ## 🎯 **The Data Engineering Pitch**
@@ -326,21 +327,25 @@ data_quality:
 
 Honest assessment of production maturity:
 
-| Component | Status | Evidence | Planned Enhancement |
-|-----------|--------|----------|---------------------|
-| **Idempotent Processing** | ✅ Implemented | `ArticlePipeline` with state tracking | - |
-| **Data Quality Gates** | ✅ Implemented | Validation at extraction, summarization | Add quality score persistence |
-| **Observability** | ✅ Basic | Health checks, structured logging | Prometheus metrics (#TODO) |
-| **Performance Indexes** | ✅ Implemented | 10 strategic DB indexes | - |
-| **Error Handling** | ✅ Implemented | Tenacity retries, RQ job retries | - |
-| **Schema Migration** | ⚠️ Manual | SQLAlchemy models + manual SQL | Alembic migrations (#TODO) |
-| **Feature Versioning** | ⚠️ Basic | Model version in summaries table | Full feature registry (#TODO) |
-| **Cost Tracking** | ❌ Planned | - | Per-pipeline run cost metrics (#TODO) |
-| **Alerting** | ❌ Planned | - | Email/Slack alerts on failures (#TODO) |
-| **Dead Letter Queue** | ❌ Planned | - | RQ failed job handling (#TODO) |
-| **Backfill Strategy** | ❌ Planned | - | Reprocess with new model versions (#TODO) |
+| Component | Status | Evidence |
+|-----------|--------|----------|
+| **Idempotent Processing** | ✅ Implemented | `ArticlePipeline` with state tracking |
+| **Data Quality Gates** | ✅ Implemented | Validation at extraction, summarization, embedding |
+| **Schema Migrations** | ✅ Implemented | Alembic with versioned migrations (`alembic upgrade head`) |
+| **Dead Letter Queue** | ✅ Implemented | `dead_letters` table + `scripts/replay_dead_letters.py` |
+| **Backfill Strategy** | ✅ Implemented | `scripts/backfill.py` — re-enqueue by model version or date range |
+| **CI / Unit Tests** | ✅ Implemented | 14 pytest tests, GitHub Actions on every push |
+| **Structured Logging** | ✅ Implemented | JSON output via `LOG_FORMAT=json`, `pipeline_runs` audit table |
+| **Config Validation** | ✅ Implemented | Pydantic `BaseSettings` — fails fast at startup if env vars missing |
+| **Observability API** | ✅ Implemented | `GET /health` endpoint returns component status as JSON |
+| **Semantic Search API** | ✅ Implemented | `GET /articles?q=` — pgvector cosine similarity search |
+| **Full Docker Stack** | ✅ Implemented | `docker compose up` runs postgres, redis, workers, pipeline, API |
+| **Performance Indexes** | ✅ Implemented | 10 strategic DB indexes |
+| **Feature Versioning** | ⚠️ Basic | Model name tracked in `article_summaries.model` |
+| **Cost Tracking** | ❌ Planned | Per-pipeline run cost metrics |
+| **Alerting** | ❌ Planned | Email/Slack alerts on failures |
 
-**Current Maturity:** Development/Staging-ready. Production requires alerting and schema migration strategy.
+**Current Maturity:** Staging-ready. Production requires alerting and a managed Postgres host.
 
 ---
 
@@ -364,19 +369,23 @@ cp .env.example .env
 # - GEMINI_API_KEY (for LLM feature engineering)
 # - EMAIL credentials (for serving layer)
 
-# 4. Start data infrastructure
+# 4. Start the full stack (postgres, redis, workers, pipeline, API)
 cd docker
-docker-compose up -d  # PostgreSQL + Redis
+docker compose up -d
 
-# 5. Initialize feature store schema
-python scripts/init_tables.py
-python scripts/optimize_database.py  # Add performance indexes
+# 5. Apply schema migrations (creates all tables including migrations)
+alembic upgrade head
+
+# 6. Seed data sources
 python scripts/seed_sources.py
+python scripts/optimize_database.py  # Add performance indexes
 
-# 6. Run pipeline health check
+# 7. Run pipeline health check
 python scripts/health_check.py
+# Or via the API (once the api container is running):
+# curl http://localhost:8000/health
 
-# 7. Test pipeline end-to-end
+# 8. Test pipeline end-to-end
 python scripts/integration_test.py
 ```
 
@@ -391,6 +400,8 @@ python run_scrapers_with_pipeline.py --hours 24
 
 # Monitor pipeline execution
 python scripts/health_check.py
+# Or via the REST API:
+curl http://localhost:8000/health
 
 # Check feature store status
 python -c "from app.queue import get_message_queue; print(get_message_queue().get_queue_stats())"
@@ -415,8 +426,32 @@ python scripts/seed_subscription.py
 # Generate and deliver feature digest
 python scripts/send_digest_now.py --all --hours 24
 
-# Features are formatted as HTML + email delivery
-# Can be adapted for API serving or batch export
+# Semantic search via API
+curl "http://localhost:8000/articles?q=transformer+architecture&limit=5"
+```
+
+### Dead Letter Queue Operations
+```bash
+# Inspect failed jobs
+python scripts/replay_dead_letters.py
+
+# Replay all failed extraction jobs
+python scripts/replay_dead_letters.py --queue extraction --replay
+
+# Dry-run: see what would be replayed
+python scripts/replay_dead_letters.py --replay --dry-run
+```
+
+### Backfilling After Model Changes
+```bash
+# Re-summarize articles processed with an old LLM model
+python scripts/backfill.py --model gemini-1.5-flash
+
+# Re-process all articles scraped since a date
+python scripts/backfill.py --since 2025-01-01
+
+# Dry-run to preview scope
+python scripts/backfill.py --model gemini-1.5-flash --dry-run
 ```
 
 ---
@@ -426,8 +461,12 @@ python scripts/send_digest_now.py --all --hours 24
 ### Pipeline Health Monitoring
 
 ```bash
-# Comprehensive health check
+# CLI health check (returns pass/fail per component)
 python scripts/health_check.py
+
+# REST endpoint (returns JSON — polled by monitoring tools)
+curl http://localhost:8000/health
+# → {"status": "healthy", "checks": {"database": {"ok": true}, "redis": {"ok": true}, ...}}
 ```
 
 **Validates:**
@@ -435,7 +474,28 @@ python scripts/health_check.py
 - ✅ pgvector extension enabled
 - ✅ Redis cache availability
 - ✅ Message queue status and depths
-- ✅ Feature completeness metrics
+- ✅ Feature completeness metrics (article/summary/embedding counts)
+
+### Pipeline Run Audit
+
+Every execution of `main.py` writes a row to `pipeline_runs`:
+
+```sql
+SELECT started_at, completed_at, articles_processed, articles_failed, articles_skipped, trigger
+FROM pipeline_runs
+ORDER BY started_at DESC
+LIMIT 10;
+```
+
+### Structured Logging
+
+```bash
+# Human-readable (default — for local development)
+python main.py --mode run
+
+# JSON output (for log aggregation — CloudWatch, Datadog, etc.)
+LOG_FORMAT=json python main.py --mode run
+```
 
 ### Data Lineage Tracking
 
@@ -477,6 +537,11 @@ python scripts/benchmark.py
 ```
 nexus-pipeline/
 ├── app/
+│   ├── api/               # REST API (FastAPI)
+│   │   ├── main.py                # App entrypoint — GET /health, GET /articles
+│   │   └── routes/
+│   │       ├── health.py          # Component health endpoint
+│   │       └── articles.py        # Semantic search endpoint (pgvector)
 │   ├── scrapers/          # Multi-source data ingestion (Bronze layer)
 │   │   ├── youtube_scraper.py
 │   │   ├── openai_scraper.py
@@ -489,39 +554,56 @@ nexus-pipeline/
 │   │   ├── content_extractor.py   # Content cleaning & validation
 │   │   └── embeddings.py          # Vector embedding generation
 │   ├── orchestrator/      # Pipeline orchestration
-│   │   ├── workers.py             # RQ worker functions
+│   │   ├── workers.py             # RQ worker functions (with DLQ integration)
 │   │   └── pipeline.py            # Pipeline coordination
 │   ├── email/             # Serving layer (batch delivery)
-│   │   ├── digest_generator.py    # Feature aggregation
-│   │   ├── email_sender.py        # SMTP delivery
-│   │   ├── renderer.py            # Output formatting
+│   │   ├── digest_generator.py
+│   │   ├── email_sender.py
+│   │   ├── renderer.py
 │   │   ├── subscription_service.py
 │   │   └── templates/
 │   │       ├── digest.html
 │   │       └── digest.txt
 │   ├── database/          # Feature store schema
-│   │   ├── models.py              # SQLAlchemy ORM
-│   │   ├── base.py                # Database engine
+│   │   ├── models.py              # Core SQLAlchemy models
+│   │   ├── models_extended.py     # Pipeline models incl. DeadLetter, PipelineRun
+│   │   ├── base.py                # Database engine + session
 │   │   └── repository.py          # Data access layer
 │   ├── queue/             # Async processing (RQ)
 │   ├── cache/             # Redis caching layer
-│   └── config.py          # Configuration management
+│   ├── logging_config.py  # Centralized logging (text or JSON via LOG_FORMAT=json)
+│   └── config.py          # Pydantic BaseSettings — fails fast on missing env vars
+├── alembic/               # Schema migrations
+│   ├── env.py
+│   └── versions/
+│       ├── 9c615cf7ecec_initial_schema.py
+│       ├── b850dc962822_add_dead_letters_table.py
+│       └── e35de033c420_add_pipeline_runs_table.py
+├── tests/                 # Unit tests (pytest, SQLite in-memory)
+│   ├── conftest.py
+│   ├── test_dedup.py
+│   ├── test_quality_gates.py
+│   └── test_llm_parser.py
+├── .github/
+│   └── workflows/
+│       └── tests.yml              # CI: run pytest on every push/PR
 ├── scripts/
 │   ├── run_workers.py              # Start processing workers
-│   ├── health_check.py             # Pipeline monitoring
+│   ├── health_check.py             # CLI pipeline health check
+│   ├── backfill.py                 # Re-enqueue articles by model version or date
+│   ├── replay_dead_letters.py      # Inspect and replay DLQ entries
 │   ├── integration_test.py         # E2E validation
 │   ├── optimize_database.py        # Performance tuning
 │   ├── benchmark.py                # Performance benchmarks
 │   ├── send_digest_now.py          # Feature serving
-│   ├── init_tables.py              # Database initialization
 │   ├── seed_sources.py             # Seed data sources
 │   ├── seed_subscription.py        # Add test subscription
 │   └── test_email.py               # Email system testing
 ├── docker/
-│   └── docker-compose.yml          # PostgreSQL + Redis
+│   └── docker-compose.yml          # Full stack: postgres, redis, worker, pipeline, api
 ├── Dockerfile                      # Production container
-├── .dockerignore
-├── pyproject.toml                  # Modern Python packaging (uv)
+├── alembic.ini                     # Alembic configuration
+├── pyproject.toml                  # Dependencies + pytest config
 ├── .env.example                    # Environment template
 ├── run_scrapers_with_pipeline.py   # Main pipeline runner
 └── README.md
@@ -586,6 +668,25 @@ Validates:
 
 ## 🧪 **Testing Strategy for Data Pipelines**
 
+### Unit Tests (no live database or API required)
+
+```bash
+# Run the full pytest suite
+pytest tests/ -v
+
+# With coverage report
+pytest tests/ --cov=app --cov-report=term-missing
+```
+
+**Unit test coverage:**
+- ✅ `test_dedup.py` — URL deduplication in `bulk_create_articles()` (SQLite in-memory)
+- ✅ `test_quality_gates.py` — content length gates in extraction and summarization workers
+- ✅ `test_llm_parser.py` — Gemini response parsing: raw JSON, markdown-fenced JSON, plain text fallback
+
+Tests run automatically on every push via GitHub Actions (`.github/workflows/tests.yml`).
+
+### Integration & Operational Tests
+
 ```bash
 # 1. Health check - verify all components
 python scripts/health_check.py
@@ -600,35 +701,35 @@ python scripts/benchmark.py
 python scripts/test_email.py --full-test --recipient your@email.com
 ```
 
-**Test Coverage:**
-- ✅ Database connectivity and schema validation
-- ✅ Multi-source data ingestion
-- ✅ LLM feature generation pipeline
-- ✅ Vector embedding generation
-- ✅ Feature serving (email delivery)
-- ✅ Message queue processing
-- ✅ Performance benchmarks
-
 ---
 
 ## 📈 **Production Deployment**
 
 ### Docker Deployment
 
-**Build Container:**
+**Start the full stack with one command:**
 ```bash
-docker build -t ai-news-aggregator:latest .
+cd docker
+cp .env.example .env   # fill in credentials
+docker compose up -d
 ```
 
-**Run Workers:**
+This starts five services:
+- **postgres** — PostgreSQL 17 with pgvector
+- **redis** — Redis 7
+- **worker** — RQ workers processing extraction/summarization/embedding
+- **pipeline** — daily digest runner
+- **api** — FastAPI on port 8000
+
+**Apply schema migrations:**
 ```bash
-docker run -d \
-  --name news-workers \
-  --restart=always \
-  --env-file .env \
-  --network host \
-  ai-news-aggregator:latest \
-  python scripts/run_workers.py
+alembic upgrade head
+```
+
+**Verify everything is running:**
+```bash
+curl http://localhost:8000/health
+docker compose ps
 ```
 
 **Schedule Pipeline Jobs:**
@@ -636,20 +737,28 @@ docker run -d \
 # Add to crontab (crontab -e)
 
 # Daily data ingestion at 6 AM
-0 6 * * * docker exec news-workers python run_scrapers_with_pipeline.py --hours 24
+0 6 * * * cd /path/to/nexus-pipeline/docker && docker compose exec pipeline python run_scrapers_with_pipeline.py --hours 24
 
-# Daily feature delivery at 8 AM  
-0 8 * * * docker exec news-workers python scripts/send_digest_now.py --all
+# Daily feature delivery at 8 AM
+0 8 * * * cd /path/to/nexus-pipeline/docker && docker compose exec pipeline python scripts/send_digest_now.py --all
 ```
 
 ### GitHub Actions (CI/CD)
 
+Tests run automatically on every push and pull request via `.github/workflows/tests.yml`:
+
+```bash
+# Tests use SQLite in-memory — no database credentials needed in CI
+pytest tests/ -v --tb=short
+```
+
+For a scheduled pipeline workflow, add secrets `DATABASE_URL` and `GEMINI_API_KEY` to your repo and create `.github/workflows/daily-pipeline.yml`:
+
 ```yaml
-# .github/workflows/daily-pipeline.yml
 name: Daily Feature Pipeline
 on:
   schedule:
-    - cron: '0 6 * * *'  # Daily at 6 AM UTC
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -658,9 +767,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+        with: { python-version: "3.10" }
       - run: pip install uv && uv pip install .
+      - run: alembic upgrade head
       - run: python run_scrapers_with_pipeline.py --hours 24
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
