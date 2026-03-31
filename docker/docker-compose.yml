@@ -20,6 +20,83 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: newsaggregator-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - newsaggregator_redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: newsaggregator-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python scripts/run_workers.py
+    volumes:
+      - newsaggregator_logs:/app/logs
+
+  pipeline:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: newsaggregator-pipeline
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    command: python main.py --mode run
+    volumes:
+      - newsaggregator_logs:/app/logs
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: newsaggregator-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m uvicorn app.api.main:app --host 0.0.0.0 --port 8000
+
 volumes:
   newsaggregator_db_data:
+    driver: local
+  newsaggregator_redis_data:
+    driver: local
+  newsaggregator_logs:
     driver: local

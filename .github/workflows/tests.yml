@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv pip install --system ".[dev]"
+
+      - name: Run tests
+        env:
+          # Pydantic BaseSettings requires these at import time;
+          # use dummy values since tests mock all external calls.
+          DATABASE_URL: "sqlite:///:memory:"
+          GEMINI_API_KEY: "ci-placeholder"
+          EMAIL_SENDER: "ci@example.com"
+          EMAIL_PASSWORD: "ci-password"
+          EMAIL_RECIPIENT: "ci@example.com"
+        run: pytest tests/ -v --tb=short --cov=app --cov-report=term-missing

@@ -23,15 +23,31 @@ dependencies = [
     "requests>=2.32.5",
     "rq>=2.0.1",
     "sentence-transformers>=3.3.1",
+    "alembic>=1.13",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "python-json-logger>=2.0",
+    "pydantic-settings>=2.0",
     "sqlalchemy>=2.0.44",
     "tenacity>=9.0.0",
     "youtube-transcript-api>=1.2.3",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "pytest-cov>=5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app", "agent"]
+packages = ["app", "agent", "app/api"]
 

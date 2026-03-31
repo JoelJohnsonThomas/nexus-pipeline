@@ -157,3 +157,55 @@ class ProcessingQueue(Base):
 
     def __repr__(self):
         return f"<ProcessingQueue(id={self.id}, article_id={self.article_id}, status={self.status.value})>"
+
+
+class PipelineRun(Base):
+    """
+    Audit log for pipeline executions.
+    Each row represents one scrape-and-process cycle, recording how many
+    articles were processed, failed, or skipped. Useful for dashboards and
+    long-term trend analysis without requiring external metrics infrastructure.
+    """
+    __tablename__ = "pipeline_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    completed_at = Column(DateTime, nullable=True)
+    articles_processed = Column(Integer, nullable=False, default=0)
+    articles_failed = Column(Integer, nullable=False, default=0)
+    articles_skipped = Column(Integer, nullable=False, default=0)
+    # "scheduled", "manual", "backfill", etc.
+    trigger = Column(String(50), nullable=True)
+
+    def __repr__(self):
+        return (
+            f"<PipelineRun(id={self.id}, started_at={self.started_at}, "
+            f"processed={self.articles_processed}, failed={self.articles_failed})>"
+        )
+
+
+class DeadLetter(Base):
+    """
+    Dead letter queue for articles that have exhausted all retry attempts.
+    Stores failed jobs with their original payload so they can be inspected
+    and replayed once the underlying issue is resolved.
+    """
+    __tablename__ = "dead_letters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    article_id = Column(Integer, ForeignKey("articles.id", ondelete="SET NULL"), nullable=True, index=True)
+    queue_name = Column(String(50), nullable=False)   # extraction / summarization / embedding
+    payload = Column(JSON, nullable=False)             # original job arguments
+    error_message = Column(Text, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
+    failed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    replayed_at = Column(DateTime, nullable=True)
+    replayed = Column(Boolean, default=False, nullable=False)
+
+    article = relationship("Article")
+
+    def __repr__(self):
+        return (
+            f"<DeadLetter(id={self.id}, article_id={self.article_id}, "
+            f"queue='{self.queue_name}', replayed={self.replayed})>"
+        )

@@ -53,3 +53,21 @@ Thumbs.db
 # Docker
 docker/postgres_data/
 docker/redis_data/
+
+# Alembic compiled files
+alembic/versions/*.pyc
+
+# Debug artifacts
+debug_log.txt
+verification_result.txt
+verify_output.txt
+temp/
+
+# Accidental shell output directories
+list/
+ls/
+
+# Draft documents
+*.docx
+article_draft.md
+interview_question-*.txt

@@ -6,7 +6,8 @@ from app.database.base import Base, engine, SessionLocal, get_db_session, init_d
 from app.database.models import Source, Article, SourceType, OpenAIArticle, AnthropicArticle, YouTubeVideo
 from app.database.models_extended import (
     ArticleSummary, ArticleEmbedding, EmailSubscription, EmailDelivery,
-    ProcessingQueue, ProcessingStatus, EmailFrequency, DeliveryStatus
+    ProcessingQueue, ProcessingStatus, EmailFrequency, DeliveryStatus,
+    DeadLetter, PipelineRun,
 )
 
 __all__ = [
@@ -31,4 +32,6 @@ __all__ = [
     "ProcessingStatus",
     "EmailFrequency",
     "DeliveryStatus",
+    "DeadLetter",
+    "PipelineRun",
 ]

@@ -1,63 +1,44 @@
 """
 Configuration management for AI News Aggregator.
+Uses Pydantic BaseSettings for type validation and fast-fail on missing required fields.
 """
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
-class Config:
-    """Application configuration"""
-    
+class Settings(BaseSettings):
     # Database
-    DATABASE_URL = os.getenv(
-        "DATABASE_URL",
-        "postgresql://user:password@localhost:5432/dbname"  # Placeholder
-    )
-    
-    # 
-    # 
-    #  Gemini API
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-    
-    # Email Configuration
-    EMAIL_SENDER = os.getenv("EMAIL_SENDER")
-    EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-    EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")
-    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-    
-    # Digest Configuration
-    DIGEST_HOURS_BACK = int(os.getenv("DIGEST_HOURS_BACK", "24"))
-    TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
-    
-    @classmethod
-    def validate(cls):
-        """Validate required configuration"""
-        errors = []
-        
-        if not cls.GEMINI_API_KEY:
-            errors.append("GEMINI_API_KEY is required")
-        
-        if not cls.EMAIL_SENDER:
-            errors.append("EMAIL_SENDER is required")
-        
-        if not cls.EMAIL_PASSWORD:
-            errors.append("EMAIL_PASSWORD is required")
-        
-        if not cls.EMAIL_RECIPIENT:
-            errors.append("EMAIL_RECIPIENT is required")
-        
-        if errors:
-            raise ValueError(
-                "Missing required configuration:\n" + "\n".join(f"  - {e}" for e in errors)
-            )
-        
-        return True
+    DATABASE_URL: str = Field(..., description="PostgreSQL connection URL")
+
+    # Redis
+    REDIS_HOST: str = Field("localhost", description="Redis host")
+    REDIS_PORT: int = Field(6379, description="Redis port")
+
+    # Gemini API
+    GEMINI_API_KEY: str = Field(..., description="Google Gemini API key")
+    GEMINI_MODEL: str = Field("gemini-1.5-flash", description="Gemini model name")
+
+    # Email
+    EMAIL_SENDER: str = Field(..., description="SMTP sender address")
+    EMAIL_PASSWORD: str = Field(..., description="SMTP sender password")
+    EMAIL_RECIPIENT: str = Field(..., description="Default digest recipient")
+    SMTP_HOST: str = Field("smtp.gmail.com", description="SMTP host")
+    SMTP_PORT: int = Field(587, description="SMTP port")
+
+    # Digest / pipeline
+    DIGEST_HOURS_BACK: int = Field(24, description="Hours back to include in digest")
+    TIMEZONE: str = Field("America/New_York", description="Timezone for scheduling")
+    MAX_RETRIES: int = Field(3, description="Max pipeline job retries before dead-lettering")
+    JOB_TIMEOUT: int = Field(600, description="RQ job timeout in seconds")
+    CACHE_TTL: int = Field(3600, description="Redis cache TTL in seconds")
+    EMBEDDING_MODEL: str = Field("all-MiniLM-L6-v2", description="sentence-transformers model")
+
+    model_config = {"env_file": ".env", "populate_by_name": True, "extra": "ignore"}
 
 
-# Create config instance
-config = Config()
+# Module-level singleton — raises ValidationError at import time if required fields are missing
+settings = Settings()
+
+# Legacy alias so existing callers using `from app.config import config` still work
+# while we migrate them incrementally.
+config = settings

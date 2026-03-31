@@ -13,7 +13,11 @@ import logging
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal, Article, ArticleSummary, ArticleEmbedding, ProcessingQueue, ProcessingStatus
+from app.database import (
+    SessionLocal, Article, ArticleSummary, ArticleEmbedding,
+    ProcessingQueue, ProcessingStatus, DeadLetter,
+)
+from app.config import settings
 from app.processing.content_extractor import ContentExtractor
 from app.processing.llm_summarizer import LLMSummarizer
 from app.processing.embeddings import EmbeddingGenerator
@@ -27,29 +31,55 @@ def get_db() -> Session:
     return SessionLocal()
 
 
-def update_processing_status(article_id: int, status: str, stage: str = None, error: str = None):
-    """Update processing queue status for an article"""
+def update_processing_status(
+    article_id: int,
+    status: str,
+    stage: str = None,
+    error: str = None,
+    queue_name: str = None,
+    payload: dict = None,
+):
+    """Update processing queue status for an article.
+
+    If the job has failed and retry_count reaches MAX_RETRIES, the entry is
+    moved to the dead_letters table so it can be inspected and replayed later.
+    """
     db = get_db()
     try:
         queue_entry = db.query(ProcessingQueue).filter(ProcessingQueue.article_id == article_id).first()
-        
+
         if not queue_entry:
-            # Create new entry
             queue_entry = ProcessingQueue(
                 article_id=article_id,
                 status=status,
-                current_stage=stage
+                current_stage=stage,
             )
             db.add(queue_entry)
         else:
-            # Update existing
             queue_entry.status = status
             if stage:
                 queue_entry.current_stage = stage
             if error:
                 queue_entry.error_message = error
                 queue_entry.retry_count += 1
-        
+
+        db.flush()  # get retry_count value before commit
+
+        # Dead-letter if max retries exhausted
+        if error and queue_entry.retry_count >= settings.MAX_RETRIES:
+            dead = DeadLetter(
+                article_id=article_id,
+                queue_name=queue_name or (stage or "unknown"),
+                payload=payload or {"article_id": article_id},
+                error_message=error,
+                retry_count=queue_entry.retry_count,
+            )
+            db.add(dead)
+            logger.warning(
+                f"Article {article_id} dead-lettered after {queue_entry.retry_count} retries "
+                f"(queue={dead.queue_name}): {error}"
+            )
+
         db.commit()
     except Exception as e:
         logger.error(f"Failed to update processing status: {e}")
@@ -128,7 +158,11 @@ def extract_content(article_id: int) -> bool:
     
     except Exception as e:
         logger.error(f"Error extracting content for article {article_id}: {e}")
-        update_processing_status(article_id, ProcessingStatus.FAILED.value, error=str(e))
+        update_processing_status(
+            article_id, ProcessingStatus.FAILED.value,
+            error=str(e), queue_name="extraction",
+            payload={"article_id": article_id},
+        )
         db.rollback()
         return False
     finally:
@@ -212,7 +246,11 @@ def generate_summary(article_id: int, model: str = None) -> bool:
     
     except Exception as e:
         logger.error(f"Error generating summary for article {article_id}: {e}")
-        update_processing_status(article_id, ProcessingStatus.FAILED.value, error=str(e))
+        update_processing_status(
+            article_id, ProcessingStatus.FAILED.value,
+            error=str(e), queue_name="summarization",
+            payload={"article_id": article_id, "model": model},
+        )
         db.rollback()
         return False
     finally:
@@ -296,7 +334,11 @@ def generate_embedding(article_id: int) -> bool:
     
     except Exception as e:
         logger.error(f"Error generating embedding for article {article_id}: {e}")
-        update_processing_status(article_id, ProcessingStatus.FAILED.value, error=str(e))
+        update_processing_status(
+            article_id, ProcessingStatus.FAILED.value,
+            error=str(e), queue_name="embedding",
+            payload={"article_id": article_id},
+        )
         db.rollback()
         return False
     finally:

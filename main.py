@@ -7,20 +7,13 @@ from datetime import datetime
 import argparse
 
 from app.config import config
-from app.database import init_db
+from app.database import init_db, SessionLocal, PipelineRun
+from app.logging_config import configure_logging
 from app.scrapers.scraper_manager import ScraperManager
 from app.llm.digest_generator import DigestGenerator
 from app.email.email_sender import EmailSender
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('news_aggregator.log')
-    ]
-)
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -33,31 +26,43 @@ def run_daily_digest():
     3. Send email
     """
     logger.info("=" * 60)
-    logger.info("🚀 Starting AI News Aggregator Daily Digest")
+    logger.info("Starting AI News Aggregator Daily Digest")
     logger.info("=" * 60)
-    
+
+    db = SessionLocal()
+    pipeline_run = PipelineRun(started_at=datetime.utcnow(), trigger="scheduled")
+    db.add(pipeline_run)
+    db.commit()
+    db.refresh(pipeline_run)
+
     try:
-        # Validate configuration
-        logger.info("Validating configuration...")
-        config.validate()
-        logger.info("✅ Configuration valid")
-        
+        # Configuration is validated at import time by Pydantic BaseSettings
+        logger.info("Configuration valid")
+
         # Step 1: Scrape all sources
-        logger.info("\n📡 Step 1: Scraping news sources...")
+        logger.info("Step 1: Scraping news sources...")
         scraper = ScraperManager()
         scrape_stats = scraper.scrape_all_sources()
         
-        logger.info(f"""
-        Scraping Results:
-        - Sources processed: {scrape_stats['sources_processed']}
-        - Articles found: {scrape_stats['articles_found']}
-        - New articles: {scrape_stats['articles_new']}
-        - Duplicates skipped: {scrape_stats['articles_duplicate']}
-        - Errors: {scrape_stats['errors']}
-        """)
-        
-        if scrape_stats['articles_new'] == 0:
-            logger.warning("⚠️  No new articles found. Skipping digest generation.")
+        logger.info(
+            "Scraping complete",
+            extra={
+                "sources_processed": scrape_stats["sources_processed"],
+                "articles_found": scrape_stats["articles_found"],
+                "articles_new": scrape_stats["articles_new"],
+                "duplicates": scrape_stats["articles_duplicate"],
+                "errors": scrape_stats["errors"],
+            },
+        )
+        pipeline_run.articles_processed = scrape_stats.get("articles_new", 0)
+        pipeline_run.articles_skipped = scrape_stats.get("articles_duplicate", 0)
+        db.commit()
+
+        if scrape_stats["articles_new"] == 0:
+            logger.warning("No new articles found. Skipping digest generation.")
+            pipeline_run.completed_at = datetime.utcnow()
+            db.commit()
+            db.close()
             return
         
         # Step 2: Generate digest
@@ -86,21 +91,29 @@ def run_daily_digest():
         )
         
         if success:
-            logger.info("✅ Daily digest completed successfully!")
+            logger.info("Daily digest completed successfully")
         else:
-            logger.error("❌ Failed to send digest email")
-        
-        logger.info("=" * 60)
-        logger.info(f"🏁 Workflow completed at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        logger.info("=" * 60)
-    
+            logger.error("Failed to send digest email")
+            pipeline_run.articles_failed += 1
+
+        pipeline_run.completed_at = datetime.utcnow()
+        db.commit()
+        db.close()
+
     except ValueError as e:
-        logger.error(f"❌ Configuration error: {e}")
-        logger.error("Please check your .env file")
+        logger.error("Configuration error: %s", e)
+        pipeline_run.articles_failed += 1
+        pipeline_run.completed_at = datetime.utcnow()
+        db.commit()
+        db.close()
         sys.exit(1)
-    
+
     except Exception as e:
-        logger.error(f"❌ Unexpected error: {e}", exc_info=True)
+        logger.error("Unexpected error: %s", e, exc_info=True)
+        pipeline_run.articles_failed += 1
+        pipeline_run.completed_at = datetime.utcnow()
+        db.commit()
+        db.close()
         sys.exit(1)
 
 
@@ -132,8 +145,6 @@ def test_digest():
 def test_email():
     """Test email sending"""
     logger.info("🧪 Testing email configuration...")
-    config.validate()
-    
     email_sender = EmailSender()
     success = email_sender.send_test_email(config.EMAIL_RECIPIENT)
     
